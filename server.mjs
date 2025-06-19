@@ -4,9 +4,11 @@ import { Server } from 'socket.io';
 const dev = process.env.NODE_ENV !== 'production';
 const port = parseInt(process.env.PORT || '3000', 10);
 
-const userRooms = new Map(); // socket.id -> { userName, room }
-
-const httpServer = createServer(); // no need to handle req/res
+// Add a simple HTTP handler so Render can detect the service
+const httpServer = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Pixipush backend is running!');
+});
 
 const io = new Server(httpServer, {
   cors: {
@@ -20,7 +22,6 @@ io.on('connection', (socket) => {
 
   socket.on('join-room', ({ room, userName }) => {
     socket.join(room);
-    userRooms.set(socket.id, { userName, room });
     socket.to(room).emit('user_joined', `${userName} has joined the room.`);
   });
 
@@ -29,27 +30,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('leave-room', () => {
-    const userData = userRooms.get(socket.id);
-    if (userData) {
-      const { userName, room } = userData;
-      socket.to(room).emit('user_left', `${userName} has left the room.`);
-      socket.leave(room);
-      userRooms.delete(socket.id);
-    }
+    socket.leaveAll();
   });
 
   socket.on('disconnect', () => {
-    const userData = userRooms.get(socket.id);
-    if (userData) {
-      const { userName, room } = userData;
-      socket.to(room).emit('user_left', `${userName} has disconnected.`);
-      userRooms.delete(socket.id);
-    }
     console.log(`🔴 Client disconnected: ${socket.id}`);
   });
 });
 
+// ✅ Listen on 0.0.0.0 for Render compatibility
 httpServer.listen(port, '0.0.0.0', () => {
   console.log(`✅ Server running on http://0.0.0.0:${port}`);
 });
-
